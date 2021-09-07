@@ -72,7 +72,8 @@ COPY --from=builder /usr/local/lib/libdlib.so* /usr/local/lib
 
 # If is necesary take the php extention folder uncommenting the next line
 # RUN php -i | grep extension_dir
-COPY --from=builder /usr/local/lib/php/extensions/no-debug-non-zts-20180731/pdlib.so /usr/local/lib/php/extensions/no-debug-non-zts-20180731/
+#COPY --from=builder /usr/local/lib/php/extensions/no-debug-non-zts-20180731/pdlib.so /usr/local/lib/php/extensions/no-debug-non-zts-20180731/
+COPY --from=builder /usr/local/lib/php/extensions/no-debug-non-zts-20200930/pdlib.so /usr/local/lib/php/extensions/no-debug-non-zts-20200930/
 
 # Enable PDlib on final image
 
