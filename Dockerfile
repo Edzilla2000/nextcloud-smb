@@ -1,7 +1,7 @@
 #
 # Use a temporary image to compile and test the libraries
 #
-FROM nextcloud:apache as builder
+FROM nextcloud:21.0-fpm as builder
 
 # Build and install dlib on builder
 
@@ -68,7 +68,7 @@ RUN apt-get update ; \
 
 # Install dlib and PDlib to image
 
-COPY --from=builder /usr/local/lib/libdlib.so* /usr/local/lib
+COPY --from=builder /usr/local/lib/libdlib.so* /usr/local/lib/
 
 # If is necesary take the php extention folder uncommenting the next line
 # RUN php -i | grep extension_dir
