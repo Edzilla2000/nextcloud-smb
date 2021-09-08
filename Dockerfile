@@ -82,6 +82,8 @@ RUN echo "extension=pdlib.so" > /usr/local/etc/php/conf.d/pdlib.ini
 # Increse memory limits
 
 RUN echo memory_limit=1024M > /usr/local/etc/php/conf.d/memory-limit.ini
+RUN echo memory_limit=1024M > /usr/local/etc/php-fpm.d/memory-limit.ini
+
 
 # Pdlib is already installed, now without all build dependencies.
 # You could test again if everything is correct, uncommenting the next lines
