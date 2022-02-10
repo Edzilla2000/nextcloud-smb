@@ -1,7 +1,7 @@
 #
 # Use a temporary image to compile and test the libraries
 #
-FROM nextcloud:21.0-fpm as builder
+FROM nextcloud:22.0-apache as builder
 
 # Build and install dlib on builder
 
@@ -54,14 +54,13 @@ RUN git clone https://github.com/matiasdelellis/pdlib-min-test-suite.git \
 # If pass the tests, we are able to create the final image.
 #
 
-FROM nextcloud:21.0-fpm
+FROM nextcloud:22.0-apache
 
-LABEL version="21.0-fpm"
+LABEL version="22.0-apache"
 LABEL description="Build nextcloud image with smb support"
 
 RUN apt-get update && apt-get install -y smbclient libsmbclient-dev ocrmypdf tesseract-ocr-eng tesseract-ocr-fra libbz2-dev && rm -rf /var/lib/apt/lists/* && pecl install smbclient && docker-php-ext-enable smbclient && docker-php-ext-install bz2
 
-COPY --chown=root:root www.conf /usr/local/etc/php-fpm.d/www.conf
 
 RUN apt-get update ; \
     apt-get install -y libopenblas-base
@@ -99,4 +98,3 @@ RUN wget -c -q -O facerecognition https://github.com/matiasdelellis/facerecognit
   && mv facerecognition-*  /usr/src/nextcloud/facerecognition \
   && cd /usr/src/nextcloud/facerecognition \
   && make
-
