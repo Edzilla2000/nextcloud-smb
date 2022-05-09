@@ -1,7 +1,7 @@
 #
 # Use a temporary image to compile and test the libraries
 #
-FROM nextcloud:22-apache as builder
+FROM nextcloud:23-apache as builder
 
 # Build and install dlib on builder
 
@@ -54,9 +54,9 @@ RUN git clone https://github.com/matiasdelellis/pdlib-min-test-suite.git \
 # If pass the tests, we are able to create the final image.
 #
 
-FROM nextcloud:22-apache
+FROM nextcloud:23-apache
 
-LABEL version="22-apache"
+LABEL version="23-apache"
 LABEL description="Build nextcloud image with smb support"
 
 RUN apt-get update && apt-get install -y smbclient libsmbclient-dev ocrmypdf tesseract-ocr-eng tesseract-ocr-fra libbz2-dev && rm -rf /var/lib/apt/lists/* && pecl install smbclient && docker-php-ext-enable smbclient && docker-php-ext-install bz2
