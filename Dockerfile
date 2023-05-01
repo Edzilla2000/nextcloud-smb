@@ -1,4 +1,4 @@
-FROM nextcloud:24-apache
+FROM nextcloud:25-apache
 
 RUN apt update \
   && apt install -y wget gnupg2 unzip smbclient libsmbclient-dev ocrmypdf tesseract-ocr-eng tesseract-ocr-fra libbz2-dev libopenblas-base && rm -rf /var/lib/apt/lists/* && pecl install smbclient && docker-php-ext-enable smbclient && docker-php-ext-install bz2
