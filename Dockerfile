@@ -6,7 +6,6 @@ RUN apt update \
 # Enable repo and install dlib
 RUN echo "deb https://repo.delellis.com.ar bullseye bullseye" > /etc/apt/sources.list.d/20-pdlib.list \
   && wget --no-check-certificate -qO - https://repo.delellis.com.ar/repo.gpg.key | apt-key add -
-RUN echo 'Acquire::https::repo.delellis.com.ar::Verify-Peer "false";\nAcquire::https::repo.delellis.com.ar::Verify-Host "false";' > /etc/apt/apt.conf.d/repo.delellis.com.ar.conf
 RUN apt update \
   && apt install -y libdlib-dev
 
