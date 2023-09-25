@@ -9,4 +9,4 @@ It adds support for:
 It is build automatically when the nextcloud base image is updated.<br/>
 <br/>
 <br/>
-Currently tracking the nextcloud <i>25-apache</i> branch.
+Currently tracking the nextcloud <i>26-apache</i> branch.
