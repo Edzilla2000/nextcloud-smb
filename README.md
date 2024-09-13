@@ -11,6 +11,7 @@ It is build automatically when the nextcloud base image is updated.<br/>
 <br/>
 Currently tracking the nextcloud <i>28-apache</i> branch.<br/>
 The nextcloud27 branch tracks 27-apache and will keep autobuilding as long as nextcloud releases upgrades
+<br/>
 The nextcloud26 branch tracks 26-apache and will keep autobuilding as long as nextcloud releases upgrades
 
 
