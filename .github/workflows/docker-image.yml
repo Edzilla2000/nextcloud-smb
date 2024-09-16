@@ -27,28 +27,41 @@ jobs:
         # Fetch the latest tags from Docker Hub
         curl -s "https://hub.docker.com/v2/namespaces/library/repositories/nextcloud/tags?page_size=100" -o tags.json
 
-        # Define the current date and 3 days ago date
+        # Define the current date and 24 hours ago date
         CURRENT_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-        DATE_3_DAYS_AGO=$(date -u -d '3 days ago' +"%Y-%m-%dT%H:%M:%SZ")
+        DATE_24_HOURS_AGO=$(date -u -d '24 hours ago' +"%Y-%m-%dT%H:%M:%SZ")
 
-        # Extract last updated dates for tags
+        # Function to extract and compare tag timestamps
+        compare_tag_time() {
+          local tag_last_updated=$1
+          # Remove microseconds (.038463) and 'Z'
+          tag_last_updated=$(echo $tag_last_updated | sed -e 's/\.[0-9]*Z/Z/')
+          # Compare with the 24 hours ago date
+          if [[ "$(date -d "$tag_last_updated" +%s)" -gt "$(date -d "$DATE_24_HOURS_AGO" +%s)" ]]; then
+            echo "true"
+          else
+            echo "false"
+          fi
+        }
+
+        # Extract last updated dates for tags and check for changes
         LAST_UPDATE_28_APACHE=$(jq -r '.results[] | select(.name=="28-apache" and .architecture=="amd64") | .last_updated' tags.json)
         LAST_UPDATE_27_APACHE=$(jq -r '.results[] | select(.name=="27-apache" and .architecture=="amd64") | .last_updated' tags.json)
         LAST_UPDATE_26_APACHE=$(jq -r '.results[] | select(.name=="26-apache" and .architecture=="amd64") | .last_updated' tags.json)
 
-        # Determine if the tags were updated in the last 3 days
-        BUILD_28_APACHE=$(test "$(date -d "$LAST_UPDATE_28_APACHE" +%s)" -gt "$(date -d "$DATE_3_DAYS_AGO" +%s)" && echo "true" || echo "false")
-        BUILD_27_APACHE=$(test "$(date -d "$LAST_UPDATE_27_APACHE" +%s)" -gt "$(date -d "$DATE_3_DAYS_AGO" +%s)" && echo "true" || echo "false")
-        BUILD_26_APACHE=$(test "$(date -d "$LAST_UPDATE_26_APACHE" +%s)" -gt "$(date -d "$DATE_3_DAYS_AGO" +%s)" && echo "true" || echo "false")
+        # Check if the tags were updated in the last 24 hours
+        BUILD_28_APACHE=$(compare_tag_time "$LAST_UPDATE_28_APACHE")
+        BUILD_27_APACHE=$(compare_tag_time "$LAST_UPDATE_27_APACHE")
+        BUILD_26_APACHE=$(compare_tag_time "$LAST_UPDATE_26_APACHE")
 
-        # Set outputs to control build jobs
-        echo "::set-output name=BUILD_28_APACHE::$BUILD_28_APACHE"
-        echo "::set-output name=BUILD_27_APACHE::$BUILD_27_APACHE"
-        echo "::set-output name=BUILD_26_APACHE::$BUILD_26_APACHE"
+        # Use environment files for output (deprecation of set-output)
+        echo "BUILD_28_APACHE=$BUILD_28_APACHE" >> $GITHUB_ENV
+        echo "BUILD_27_APACHE=$BUILD_27_APACHE" >> $GITHUB_ENV
+        echo "BUILD_26_APACHE=$BUILD_26_APACHE" >> $GITHUB_ENV
 
   build-master:
     needs: check-tags  # This job depends on the check-tags job to complete
-    if: needs.check-tags.outputs.build_28_apache == 'true'
+    if: env.BUILD_28_APACHE == 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout master branch
@@ -72,7 +85,7 @@ jobs:
 
   build-nextcloud27:
     needs: check-tags
-    if: needs.check-tags.outputs.build_27_apache == 'true'
+    if: env.BUILD_27_APACHE == 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout nextcloud27 branch
@@ -95,7 +108,7 @@ jobs:
 
   build-nextcloud26:
     needs: check-tags
-    if: needs.check-tags.outputs.build_26_apache == 'true'
+    if: env.BUILD_26_APACHE == 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout nextcloud26 branch
