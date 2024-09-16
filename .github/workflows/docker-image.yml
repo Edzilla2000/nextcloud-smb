@@ -1,28 +1,37 @@
-name: Build and Push Docker Image
+name: Check Docker Hub Tags, Build and Push
 
 on:
-  push:
-    branches:
-      - master
-      - nextcloud27
-      - nextcloud26
-  workflow_dispatch:
-    inputs:
-      branch:
-        description: 'Branch name to build'
-        required: true
-        default: 'master'
-        type: string
+  schedule:
+    - cron: '0 2,14 * * *'
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
-  build:
+  check-and-build:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        ref: ${{ github.event.inputs.branch || github.ref_name }}
+
+    - name: Check Docker Hub for tag updates
+      id: check_tags
+      run: |
+        # Define Docker Hub repository details
+        REPO="nextcloud"
+        IMAGE="nextcloud"
+
+        # Fetch the latest tags from Docker Hub
+        curl -s "https://hub.docker.com/v2/repositories/${REPO}/${IMAGE}/tags/?page_size=100" -o tags.json
+
+        # Extract tag details
+        TAG_28_APACHE=$(jq -r '.results[] | select(.name=="28-apache") | .last_updated' tags.json)
+        TAG_27_APACHE=$(jq -r '.results[] | select(.name=="27-apache") | .last_updated' tags.json)
+        TAG_26_APACHE=$(jq -r '.results[] | select(.name=="26-apache") | .last_updated' tags.json)
+
+        # Save tag details for comparison
+        echo "TAG_28_APACHE=$TAG_28_APACHE" >> $GITHUB_ENV
+        echo "TAG_27_APACHE=$TAG_27_APACHE" >> $GITHUB_ENV
+        echo "TAG_26_APACHE=$TAG_26_APACHE" >> $GITHUB_ENV
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -33,28 +42,30 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Build and push Docker images
+    - name: Build and Push Docker Image for master branch
+      if: env.TAG_28_APACHE != ''
       run: |
-        # Determine the branch name and corresponding tags
-        BRANCH_NAME=${{ github.event.inputs.branch || github.ref_name }}
-        case "$BRANCH_NAME" in
-          master)
-            TAGS="28-apache latest"
-            ;;
-          nextcloud27)
-            TAGS="27-apache"
-            ;;
-          nextcloud26)
-            TAGS="26-apache"
-            ;;
-          *)
-            echo "Branch $BRANCH_NAME does not match any known patterns."
-            exit 1
-            ;;
-        esac
+        # Check out the master branch
+        git checkout master
 
-        # Build and push images with the appropriate tags
-        for TAG in $TAGS; do
-          docker build -t cardonaje/nextcloud:$TAG .
-          docker push cardonaje/nextcloud:$TAG
-        done
+        # Build and push Docker image with tag 28-apache and latest
+        docker buildx build --push -t cardonaje/nextcloud:28-apache .
+        docker buildx build --push -t cardonaje/nextcloud:latest .
+
+    - name: Build and Push Docker Image for nextcloud27 branch
+      if: env.TAG_27_APACHE != ''
+      run: |
+        # Check out the nextcloud27 branch
+        git checkout nextcloud27
+
+        # Build and push Docker image with tag 27-apache
+        docker buildx build --push -t cardonaje/nextcloud:27-apache .
+
+    - name: Build and Push Docker Image for nextcloud26 branch
+      if: env.TAG_26_APACHE != ''
+      run: |
+        # Check out the nextcloud26 branch
+        git checkout nextcloud26
+
+        # Build and push Docker image with tag 26-apache
+        docker buildx build --push -t cardonaje/nextcloud:26-apache .
