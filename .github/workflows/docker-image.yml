@@ -21,8 +21,8 @@ jobs:
         IMAGE="nextcloud"
 
         # Fetch the latest tags from Docker Hub
-        curl -s "https://hub.docker.com/v2/repositories/${REPO}/${IMAGE}/tags/?page_size=100" -o tags.json
-
+        curl -s "https://hub.docker.com/v2/namespaces/library/repositories/nextcloud/tags?page_size=100" -o tags.json
+        
         # Extract tag details
         TAG_28_APACHE=$(jq -r '.results[] | select(.name=="28-apache") | .last_updated' tags.json)
         TAG_27_APACHE=$(jq -r '.results[] | select(.name=="27-apache") | .last_updated' tags.json)
