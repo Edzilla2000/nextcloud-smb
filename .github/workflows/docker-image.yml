@@ -12,7 +12,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
+      with:
+        fetch-depth: 0  # Fetch all branches
     - name: Check Docker Hub for tag updates
       id: check_tags
       run: |
@@ -56,8 +57,8 @@ jobs:
       if: env.TAG_27_APACHE != ''
       run: |
         # Check out the nextcloud27 branch
-        git checkout nextcloud27
-
+        git checkout nextcloud27 || { echo "Branch nextcloud27 not found"; exit 1; }
+        
         # Build and push Docker image with tag 27-apache
         docker buildx build --push -t cardonaje/nextcloud:27-apache .
 
@@ -65,7 +66,7 @@ jobs:
       if: env.TAG_26_APACHE != ''
       run: |
         # Check out the nextcloud26 branch
-        git checkout nextcloud26
-
+        git checkout nextcloud26 || { echo "Branch nextcloud26 not found"; exit 1; }
+        
         # Build and push Docker image with tag 26-apache
         docker buildx build --push -t cardonaje/nextcloud:26-apache .
