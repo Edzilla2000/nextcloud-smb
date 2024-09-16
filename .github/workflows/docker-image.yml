@@ -2,7 +2,7 @@ name: Check Docker Hub Tags, Build and Push
 
 on:
   schedule:
-    - cron: '0 2,14 * * *'
+    - cron: '0 2,14 * * *'  # Runs daily at 2 AM and 2 PM
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
@@ -14,25 +14,34 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Fetch all branches
+
     - name: Check Docker Hub for tag updates
       id: check_tags
       run: |
         # Define Docker Hub repository details
-        REPO="nextcloud"
-        IMAGE="nextcloud"
-
+        REPO="library/nextcloud"
+        
         # Fetch the latest tags from Docker Hub
         curl -s "https://hub.docker.com/v2/namespaces/library/repositories/nextcloud/tags?page_size=100" -o tags.json
-        
-        # Extract tag details
-        TAG_28_APACHE=$(jq -r '.results[] | select(.name=="28-apache") | .last_updated' tags.json)
-        TAG_27_APACHE=$(jq -r '.results[] | select(.name=="27-apache") | .last_updated' tags.json)
-        TAG_26_APACHE=$(jq -r '.results[] | select(.name=="26-apache") | .last_updated' tags.json)
 
-        # Save tag details for comparison
-        echo "TAG_28_APACHE=$TAG_28_APACHE" >> $GITHUB_ENV
-        echo "TAG_27_APACHE=$TAG_27_APACHE" >> $GITHUB_ENV
-        echo "TAG_26_APACHE=$TAG_26_APACHE" >> $GITHUB_ENV
+        # Define the current date and 3 days ago date
+        CURRENT_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        DATE_3_DAYS_AGO=$(date -u -d '3 days ago' +"%Y-%m-%dT%H:%M:%SZ")
+
+        # Extract last updated dates for tags
+        LAST_UPDATE_28_APACHE=$(jq -r '.results[] | select(.name=="28-apache" and .architecture=="amd64") | .last_updated' tags.json)
+        LAST_UPDATE_27_APACHE=$(jq -r '.results[] | select(.name=="27-apache" and .architecture=="amd64") | .last_updated' tags.json)
+        LAST_UPDATE_26_APACHE=$(jq -r '.results[] | select(.name=="26-apache" and .architecture=="amd64") | .last_updated' tags.json)
+
+        # Determine if the tags were updated in the last 3 days
+        BUILD_28_APACHE=$(test "$(date -d "$LAST_UPDATE_28_APACHE" +%s)" -gt "$(date -d "$DATE_3_DAYS_AGO" +%s)" && echo "true" || echo "false")
+        BUILD_27_APACHE=$(test "$(date -d "$LAST_UPDATE_27_APACHE" +%s)" -gt "$(date -d "$DATE_3_DAYS_AGO" +%s)" && echo "true" || echo "false")
+        BUILD_26_APACHE=$(test "$(date -d "$LAST_UPDATE_26_APACHE" +%s)" -gt "$(date -d "$DATE_3_DAYS_AGO" +%s)" && echo "true" || echo "false")
+
+        # Save build decisions for future steps
+        echo "BUILD_28_APACHE=$BUILD_28_APACHE" >> $GITHUB_ENV
+        echo "BUILD_27_APACHE=$BUILD_27_APACHE" >> $GITHUB_ENV
+        echo "BUILD_26_APACHE=$BUILD_26_APACHE" >> $GITHUB_ENV
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -44,7 +53,7 @@ jobs:
         password: ${{ secrets.DOCKER_PASSWORD }}
 
     - name: Build and Push Docker Image for master branch
-      if: env.TAG_28_APACHE != ''
+      if: env.BUILD_28_APACHE == 'true'
       run: |
         # Check out the master branch
         git checkout master
@@ -54,19 +63,19 @@ jobs:
         docker buildx build --push -t cardonaje/nextcloud:latest .
 
     - name: Build and Push Docker Image for nextcloud27 branch
-      if: env.TAG_27_APACHE != ''
+      if: env.BUILD_27_APACHE == 'true'
       run: |
         # Check out the nextcloud27 branch
         git checkout nextcloud27 || { echo "Branch nextcloud27 not found"; exit 1; }
-        
+
         # Build and push Docker image with tag 27-apache
         docker buildx build --push -t cardonaje/nextcloud:27-apache .
 
     - name: Build and Push Docker Image for nextcloud26 branch
-      if: env.TAG_26_APACHE != ''
+      if: env.BUILD_26_APACHE == 'true'
       run: |
         # Check out the nextcloud26 branch
         git checkout nextcloud26 || { echo "Branch nextcloud26 not found"; exit 1; }
-        
+
         # Build and push Docker image with tag 26-apache
         docker buildx build --push -t cardonaje/nextcloud:26-apache .
