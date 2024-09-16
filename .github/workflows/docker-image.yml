@@ -1,18 +1,19 @@
-name: Docker Image CI
+name: Build and Push Docker Image
 
 on:
   push:
     branches:
       - master
-      - nextcloud26
       - nextcloud27
+      - nextcloud26
   workflow_dispatch:
     inputs:
       branch:
         description: 'Branch name to build'
         required: true
-        default: 'main'
+        default: 'master'
         type: string
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,6 +21,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.inputs.branch || github.ref_name }}
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
@@ -32,11 +35,26 @@ jobs:
 
     - name: Build and push Docker images
       run: |
-        # Determine the branch name to use for the image tag
-        if [ "${{ github.event_name }}" = "push" ]; then
-          IMAGE_TAG=${{ github.ref_name }}
-        else
-          IMAGE_TAG=${{ github.event.inputs.branch }}
-        fi
-        docker build -t cardonaje/nextcloud:${IMAGE_TAG} .
-        docker push cardonaje/nextcloud:${IMAGE_TAG}
+        # Determine the branch name and corresponding tags
+        BRANCH_NAME=${{ github.event.inputs.branch || github.ref_name }}
+        case "$BRANCH_NAME" in
+          master)
+            TAGS="28-apache latest"
+            ;;
+          nextcloud27)
+            TAGS="27-apache"
+            ;;
+          nextcloud26)
+            TAGS="26-apache"
+            ;;
+          *)
+            echo "Branch $BRANCH_NAME does not match any known patterns."
+            exit 1
+            ;;
+        esac
+
+        # Build and push images with the appropriate tags
+        for TAG in $TAGS; do
+          docker build -t cardonaje/nextcloud:$TAG .
+          docker push cardonaje/nextcloud:$TAG
+        done
