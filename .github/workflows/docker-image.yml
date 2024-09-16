@@ -11,7 +11,6 @@ jobs:
     outputs:
       build_28_apache: ${{ steps.check_tags.outputs.build_28_apache }}
       build_27_apache: ${{ steps.check_tags.outputs.build_27_apache }}
-      build_26_apache: ${{ steps.check_tags.outputs.build_26_apache }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -45,23 +44,20 @@ jobs:
         }
 
         # Extract last updated dates for tags and check for changes
-        LAST_UPDATE_28_APACHE=$(jq -r '.results[] | select(.name=="28-apache" and .architecture=="amd64") | .last_updated' tags.json)
-        LAST_UPDATE_27_APACHE=$(jq -r '.results[] | select(.name=="27-apache" and .architecture=="amd64") | .last_updated' tags.json)
-        LAST_UPDATE_26_APACHE=$(jq -r '.results[] | select(.name=="26-apache" and .architecture=="amd64") | .last_updated' tags.json)
+        LAST_UPDATE_28_APACHE=$(jq -r '.results[] | select(.name=="28-apache") | .last_updated' tags.json)
+        LAST_UPDATE_27_APACHE=$(jq -r '.results[] | select(.name=="27-apache") | .last_updated' tags.json)
 
         # Check if the tags were updated in the last 24 hours
         BUILD_28_APACHE=$(compare_tag_time "$LAST_UPDATE_28_APACHE")
         BUILD_27_APACHE=$(compare_tag_time "$LAST_UPDATE_27_APACHE")
-        BUILD_26_APACHE=$(compare_tag_time "$LAST_UPDATE_26_APACHE")
 
-        # Use environment files for output (deprecation of set-output)
-        echo "::set-output name=build_28_apache::$BUILD_28_APACHE"
-        echo "::set-output name=build_27_apache::$BUILD_27_APACHE"
-        echo "::set-output name=build_26_apache::$BUILD_26_APACHE"
+        # Use environment files for output (replaces set-output)
+        echo "build_28_apache=$BUILD_28_APACHE" >> $GITHUB_ENV
+        echo "build_27_apache=$BUILD_27_APACHE" >> $GITHUB_ENV
 
   build-master:
     needs: check-tags
-    if: needs.check-tags.outputs.build_28_apache == 'true'
+    if: env.build_28_apache == 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout master branch
@@ -85,7 +81,7 @@ jobs:
 
   build-nextcloud27:
     needs: check-tags
-    if: needs.check-tags.outputs.build_27_apache == 'true'
+    if: env.build_27_apache == 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout nextcloud27 branch
@@ -105,26 +101,3 @@ jobs:
     - name: Build and Push Docker Image for nextcloud27 branch
       run: |
         docker buildx build --push -t cardonaje/nextcloud:27-apache .
-
-  build-nextcloud26:
-    needs: check-tags
-    if: needs.check-tags.outputs.build_26_apache == 'true'
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout nextcloud26 branch
-      uses: actions/checkout@v4
-      with:
-        ref: nextcloud26
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Build and Push Docker Image for nextcloud26 branch
-      run: |
-        docker buildx build --push -t cardonaje/nextcloud:26-apache .
