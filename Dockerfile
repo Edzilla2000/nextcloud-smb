@@ -4,8 +4,7 @@ RUN apt update \
   && apt install -y wget gnupg2 unzip smbclient libsmbclient-dev ocrmypdf tesseract-ocr-eng tesseract-ocr-fra libbz2-dev libopenblas-dev && rm -rf /var/lib/apt/lists/* && pecl install smbclient && docker-php-ext-enable smbclient && docker-php-ext-install bz2
 
 # Enable repo and install dlib
-RUN echo "deb https://repo.delellis.com.ar bullseye bullseye" > /etc/apt/sources.list.d/20-pdlib.list \
-  && wget -qO - https://repo.delellis.com.ar/repo.gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/pdlib.gpg
+RUN echo "deb [trusted=yes] https://repo.delellis.com.ar bullseye bullseye" > /etc/apt/sources.list.d/20-pdlib.list
 
 RUN apt update \
   && apt install -y libdlib-dev build-essential cmake git libx11-dev
