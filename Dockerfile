@@ -5,8 +5,9 @@ RUN apt update \
 
 # Enable repo and install dlib
 RUN echo "deb https://repo.delellis.com.ar bullseye bullseye" > /etc/apt/sources.list.d/20-pdlib.list \
-  && wget -qO - https://blog.edzilla.info/files/repo.gpg.key | apt-key add -
-RUN apt update --allow-insecure-repositories \
+  && wget -qO - https://repo.delellis.com.ar/repo.gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/pdlib.gpg
+
+RUN apt update \
   && apt install -y libdlib-dev build-essential cmake git libx11-dev
 
 RUN git clone https://github.com/davisking/dlib.git \
