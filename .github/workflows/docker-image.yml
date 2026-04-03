@@ -4,61 +4,118 @@ on:
     - cron: '0 2,14 * * *'  # Runs daily at 2 AM and 2 PM
   workflow_dispatch:  # Allows manual triggering
 jobs:
-  check-tags:
+  discover-branches:
     runs-on: ubuntu-latest
     outputs:
-      build_31_apache: ${{ steps.check_tags.outputs.build_31_apache }}
-      build_28_apache: ${{ steps.check_tags.outputs.build_28_apache }}
-      build_27_apache: ${{ steps.check_tags.outputs.build_27_apache }}
+      branch-matrix: ${{ steps.set-matrix.outputs.branches }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all branches
+    - name: Discover branches
+      id: set-matrix
+      run: |
+        # Get all remote branches, exclude common non-version branches
+        BRANCHES=$(git branch -r | grep -v 'HEAD' | sed 's/.*origin\///' | grep -v '^gh-pages$' | grep -v '^main$' | sort -u)
+        # Build JSON array for matrix
+        JSON="["
+        FIRST=true
+        for branch in $BRANCHES; do
+          if [ "$FIRST" = true ]; then
+            FIRST=false
+          else
+            JSON+=","
+          fi
+          JSON+="\"$branch\""
+        done
+        JSON+="]"
+        echo "branches=$JSON" >> $GITHUB_OUTPUT
+        echo "Discovered branches: $JSON"
+
+  check-tags:
+    needs: discover-branches
+    runs-on: ubuntu-latest
+    outputs:
+      build-matrix: ${{ steps.check-outputs.outputs.build-matrix }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Fetch all branches
     - name: Check Docker Hub for tag updates
-      id: check_tags
+      id: check-outputs
       run: |
-        # Define Docker Hub repository details
-        REPO="library/nextcloud"
-        
         # Fetch the latest tags from Docker Hub
         curl -s "https://hub.docker.com/v2/namespaces/library/repositories/nextcloud/tags?page_size=100" -o tags.json
-        # Define the current date and 24 hours ago date
-        CURRENT_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+        # Define 24 hours ago
         DATE_24_HOURS_AGO=$(date -u -d '24 hours ago' +"%Y-%m-%dT%H:%M:%SZ")
-        # Function to extract and compare tag timestamps
-        compare_tag_time() {
-          local tag_last_updated=$1
-          # Remove microseconds (.038463) and 'Z'
-          tag_last_updated=$(echo $tag_last_updated | sed -e 's/\.[0-9]*Z/Z/')
-          # Compare with the 24 hours ago date
-          if [[ "$(date -d "$tag_last_updated" +%s)" -gt "$(date -d "$DATE_24_HOURS_AGO" +%s)" ]]; then
-            echo "true"
-          else
-            echo "false"
+
+        # Get the branch matrix from previous job
+        BRANCHES='${{ needs.discover-branches.outputs.branch-matrix }}'
+
+        # Build build matrix
+        BUILD_MATRIX="{"
+        FIRST=true
+
+        for branch in $(echo "$BRANCHES" | jq -r '.[]'); do
+          # Extract version from Dockerfile in each branch
+          VERSION=$(git show "origin/$branch:Dockerfile" 2>/dev/null | grep '^FROM nextcloud:' | sed 's/FROM nextcloud:\([0-9]*\).*/\1/')
+
+          if [ -z "$VERSION" ]; then
+            continue
           fi
-        }
-        # Extract last updated dates for tags and check for changes
-        LAST_UPDATE_31_APACHE=$(jq -r '.results[] | select(.name=="31-apache") | .last_updated' tags.json)
-        LAST_UPDATE_28_APACHE=$(jq -r '.results[] | select(.name=="28-apache") | .last_updated' tags.json)
-        LAST_UPDATE_27_APACHE=$(jq -r '.results[] | select(.name=="27-apache") | .last_updated' tags.json)
-        # Check if the tags were updated in the last 24 hours
-        BUILD_31_APACHE=$(compare_tag_time "$LAST_UPDATE_31_APACHE")
-        BUILD_28_APACHE=$(compare_tag_time "$LAST_UPDATE_28_APACHE")
-        BUILD_27_APACHE=$(compare_tag_time "$LAST_UPDATE_27_APACHE")
-        # Set the outputs for future jobs
-        echo "build_31_apache=$BUILD_31_APACHE" >> $GITHUB_OUTPUT
-        echo "build_28_apache=$BUILD_28_APACHE" >> $GITHUB_OUTPUT
-        echo "build_27_apache=$BUILD_27_APACHE" >> $GITHUB_OUTPUT
-  build-master:
-    needs: check-tags
-    if: needs.check-tags.outputs.build_31_apache == 'true'
+
+          TAG="${VERSION}-apache"
+
+          # Get tag last update time
+          LAST_UPDATE=$(jq -r ".results[] | select(.name==\"$TAG\") | .last_updated" tags.json)
+
+          if [ -z "$LAST_UPDATE" ]; then
+            continue
+          fi
+
+          # Remove microseconds and compare
+          LAST_UPDATE_CLEAN=$(echo "$LAST_UPDATE" | sed 's/\.[0-9]*Z/Z/')
+
+          if [[ "$(date -d "$LAST_UPDATE_CLEAN" +%s)" -gt "$(date -d "$DATE_24_HOURS_AGO" +%s)" ]]; then
+            SHOULD_BUILD="true"
+          else
+            SHOULD_BUILD="false"
+          fi
+
+          if [ "$FIRST" = true ]; then
+            FIRST=false
+          else
+            BUILD_MATRIX+=","
+          fi
+          BUILD_MATRIX+="\"$branch\":{\"version\":\"$VERSION\",\"should_build\":$SHOULD_BUILD}"
+        done
+
+        BUILD_MATRIX+="}"
+        echo "build-matrix=$BUILD_MATRIX" >> $GITHUB_OUTPUT
+        echo "Build matrix: $BUILD_MATRIX"
+
+  build:
+    needs: [discover-branches, check-tags]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        branch: ${{ fromJson(needs.discover-branches.outputs.branch-matrix) }}
+    if: >-
+      fromJson(needs.check-tags.outputs.build-matrix)[matrix.branch].should_build == true
     steps:
-    - name: Checkout master branch
+    - name: Checkout branch
       uses: actions/checkout@v4
       with:
-        ref: master
+        ref: ${{ matrix.branch }}
+    - name: Get version from Dockerfile
+      id: get-version
+      run: |
+        VERSION=$(grep '^FROM nextcloud:' Dockerfile | sed 's/FROM nextcloud:\([0-9]*\).*/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
     - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
@@ -66,48 +123,11 @@ jobs:
         password: ${{ secrets.DOCKER_PASSWORD }}
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-    - name: Build and Push Docker Image for master branch
+    - name: Build and Push Docker Image
       run: |
-        docker buildx build --push -t cardonaje/nextcloud:31-apache .
-        docker buildx build --push -t cardonaje/nextcloud:latest .
-  build-nextcloud28:
-    needs: check-tags
-    if: needs.check-tags.outputs.build_28_apache == 'true'
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout nextcloud28 branch
-      uses: actions/checkout@v4
-      with:
-        ref: nextcloud28
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    - name: Build and Push Docker Image for nextcloud28 branch
-      run: |
-        docker buildx build --push -t cardonaje/nextcloud:28-apache .
-  build-nextcloud27:
-    needs: check-tags
-    if: needs.check-tags.outputs.build_27_apache == 'true'
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout nextcloud27 branch
-      uses: actions/checkout@v4
-      with:
-        ref: nextcloud27
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    - name: Build and Push Docker Image for nextcloud27 branch
-      run: |
-        docker buildx build --push -t cardonaje/nextcloud:27-apache .
+        VERSION=${{ steps.get-version.outputs.version }}
+        docker buildx build --push -t cardonaje/nextcloud:${VERSION}-apache .
+
   workflow-keepalive:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
