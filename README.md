@@ -1,19 +1,15 @@
 # nextcloud-smb
 
 My customized Nextcloud docker image. <br/>
-It adds support for: 
+It adds support for:
 * SMB
 * PDF OCR through <a href="https://github.com/R0Wi/workflow_ocr">this project</a>
-* Face recognition through <a href="https://apps.nextcloud.com/apps/facerecognition">this project</a> 
+* Face recognition through <a href="https://apps.nextcloud.com/apps/facerecognition">this project</a>
 <br/>
-It is build automatically when the nextcloud base image is updated.<br/>
+It is built automatically when the nextcloud base image is updated.<br/>
 <br/>
 <br/>
-Currently tracking the nextcloud <i>31-apache</i> branch.<br/>
-The nextcloud28 branch tracks 28-apache and will keep autobuilding as long as nextcloud releases upgrades
+Each branch tracks a specific Nextcloud version and autobuilds independently when the corresponding Docker Hub tag is updated.<br/>
+Currently the default branch tracks the nextcloud <i>33-apache</i> image.<br/>
 <br/>
-The nextcloud27 branch tracks 27-apache and will keep autobuilding as long as nextcloud releases upgrades
-<br/>
-The nextcloud26 branch tracks 26-apache and will keep autobuilding as long as nextcloud releases upgrades
-
-
+To add a new version, create a branch and update the `FROM` line in the Dockerfile to point to the desired `nextcloud:<version>-apache` tag. The CI will automatically discover the branch and build it.
