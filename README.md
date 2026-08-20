@@ -10,6 +10,6 @@ It is built automatically when the nextcloud base image is updated.<br/>
 <br/>
 <br/>
 Each branch tracks a specific Nextcloud version and autobuilds independently when the corresponding Docker Hub tag is updated.<br/>
-Currently the default branch tracks the nextcloud <i>33-apache</i> image.<br/>
+Currently the default branch tracks the nextcloud <i>34-apache</i> image.<br/>
 <br/>
 To add a new version, create a branch and update the `FROM` line in the Dockerfile to point to the desired `nextcloud:<version>-apache` tag. The CI will automatically discover the branch and build it.

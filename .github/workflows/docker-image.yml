@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: '0 2,14 * * *'  # Runs daily at 2 AM and 2 PM
   workflow_dispatch:  # Allows manual triggering
+    inputs:
+      force_branches:
+        description: 'Build these branches regardless of Docker Hub freshness: comma-separated names, or "all". Empty = normal 24h check.'
+        required: false
+        default: ''
 jobs:
   check-updates:
     runs-on: ubuntu-latest
@@ -15,6 +20,8 @@ jobs:
         fetch-depth: 0  # Fetch all branches
     - name: Check Docker Hub for tag updates
       id: check
+      env:
+        FORCE_BRANCHES: ${{ inputs.force_branches }}
       run: |
         # Fetch the latest tags from Docker Hub
         curl -s "https://hub.docker.com/v2/namespaces/library/repositories/nextcloud/tags?page_size=100" -o tags.json
@@ -24,6 +31,9 @@ jobs:
 
         # Get all remote branches
         BRANCHES=$(git branch -r | grep -v 'HEAD' | sed 's/.*origin\///' | grep -v '^gh-pages$' | grep -v '^main$' | sort -u)
+
+        # Forced list, from workflow_dispatch (whitespace stripped)
+        FORCE=$(printf '%s' "${FORCE_BRANCHES:-}" | tr -d '[:space:]')
 
         # Build JSON array of branches that need building
         MATRIX="["
@@ -39,24 +49,36 @@ jobs:
 
           TAG="${VERSION}-apache"
 
-          # Get tag last update time
-          LAST_UPDATE=$(jq -r ".results[] | select(.name==\"$TAG\") | .last_updated" tags.json)
-
-          if [ -z "$LAST_UPDATE" ] || [ "$LAST_UPDATE" = "null" ]; then
-            continue
+          # A newly added version branch has no recent tag push, so allow forcing it
+          FORCED=false
+          if [ "$FORCE" = "all" ]; then
+            FORCED=true
+          elif [ -n "$FORCE" ] && [[ ",$FORCE," == *",$branch,"* ]]; then
+            FORCED=true
           fi
 
-          # Remove microseconds and compare
-          LAST_UPDATE_CLEAN=$(echo "$LAST_UPDATE" | sed 's/\.[0-9]*Z/Z/')
+          if [ "$FORCED" != true ]; then
+            # Get tag last update time
+            LAST_UPDATE=$(jq -r ".results[] | select(.name==\"$TAG\") | .last_updated" tags.json)
 
-          if [[ "$(date -d "$LAST_UPDATE_CLEAN" +%s)" -gt "$(date -d "$DATE_24_HOURS_AGO" +%s)" ]]; then
-            if [ "$FIRST" = true ]; then
-              FIRST=false
-            else
-              MATRIX+=","
+            if [ -z "$LAST_UPDATE" ] || [ "$LAST_UPDATE" = "null" ]; then
+              continue
             fi
-            MATRIX+="{\"branch\":\"$branch\",\"version\":\"$VERSION\"}"
+
+            # Remove microseconds and compare
+            LAST_UPDATE_CLEAN=$(echo "$LAST_UPDATE" | sed 's/\.[0-9]*Z/Z/')
+
+            if [[ "$(date -d "$LAST_UPDATE_CLEAN" +%s)" -le "$(date -d "$DATE_24_HOURS_AGO" +%s)" ]]; then
+              continue
+            fi
           fi
+
+          if [ "$FIRST" = true ]; then
+            FIRST=false
+          else
+            MATRIX+=","
+          fi
+          MATRIX+="{\"branch\":\"$branch\",\"version\":\"$VERSION\"}"
         done
 
         MATRIX+="]"
@@ -68,6 +90,7 @@ jobs:
     if: needs.check-updates.outputs.build-matrix != '[]'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include: ${{ fromJson(needs.check-updates.outputs.build-matrix) }}
     steps:
