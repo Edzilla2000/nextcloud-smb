@@ -9,7 +9,7 @@ RUN echo "deb [trusted=yes] https://repo.delellis.com.ar bullseye bullseye" > /e
 RUN apt update \
   && apt install -y libdlib-dev build-essential cmake git libx11-dev
 
-RUN git clone https://github.com/davisking/dlib.git \
+RUN git clone --depth 1 --branch v20.0.1 https://github.com/davisking/dlib.git \
 && cd dlib/dlib \
 && mkdir build \
 && cd build \
